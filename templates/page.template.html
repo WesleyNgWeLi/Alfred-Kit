@@ -1,0 +1,883 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Alfred</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: three lenses on one data set. Queues = replies owed, commitments and waiting-on, Today = agenda with prep, Portfolio = senior-PM view of decisions, risks and stakeholders. Each opens with one recommended action. */
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --sunk:#e8ecf2; --fg:#16202e; --muted:#5a6678; --line:#d3d9e3;
+  --accent:#1f5fa8; --accent-ink:#ffffff; --accent-soft:#e4eef9;
+  --red:#b4232c; --red-bg:#fbe9ea; --amber:#9a5b00; --amber-bg:#fdf1dc; --green:#1d7a45; --green-bg:#e3f4ea;
+  --ask:#7a3fb0; --ask-bg:#f1e9fa; --commit:#1f5fa8; --commit-bg:#e4eef9; --wait:#5a6678; --wait-bg:#eceff3;
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141c; --surface:#171e29; --sunk:#1f2835; --fg:#e6ebf2; --muted:#9aa6b8; --line:#2c3746;
+  --accent:#6aa5ec; --accent-ink:#0f141c; --accent-soft:#1a2b42;
+  --red:#f28b91; --red-bg:#3a1c20; --amber:#f0b45c; --amber-bg:#3a2c14; --green:#6fd09a; --green-bg:#16301f;
+  --ask:#c39bf0; --ask-bg:#2c2140; --commit:#6aa5ec; --commit-bg:#1a2b42; --wait:#9aa6b8; --wait-bg:#232c39;
+  color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0f141c; --surface:#171e29; --sunk:#1f2835; --fg:#e6ebf2; --muted:#9aa6b8; --line:#2c3746;
+  --accent:#6aa5ec; --accent-ink:#0f141c; --accent-soft:#1a2b42;
+  --red:#f28b91; --red-bg:#3a1c20; --amber:#f0b45c; --amber-bg:#3a2c14; --green:#6fd09a; --green-bg:#16301f;
+  --ask:#c39bf0; --ask-bg:#2c2140; --commit:#6aa5ec; --commit-bg:#1a2b42; --wait:#9aa6b8; --wait-bg:#232c39;
+  color-scheme:dark;}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);padding-inline:clamp(16px,2.5vw,40px);padding-block:20px 48px}
+.wrap{width:100%;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance}
+h1{font-size:30px;letter-spacing:-.01em}
+h2{font-size:19px;display:flex;align-items:baseline;gap:10px}
+h2 .count{font:600 13px var(--f-mono);color:var(--muted)}
+h3{font-size:17px}
+.muted{color:var(--muted)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px}
+.sweep{font:13px var(--f-mono);color:var(--muted)}
+nav.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+nav.tabs button{border:0;border-bottom:3px solid transparent;border-radius:0;background:none;padding:10px 14px;font:700 15px var(--f-display);color:var(--muted)}
+nav.tabs button[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent)}
+nav.tabs button:hover{color:var(--fg)}
+.view{display:flex;flex-direction:column;gap:24px}
+.rec{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 14px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:14px 16px}
+.rec .tag{grid-row:span 3;align-self:start;font:700 11px var(--f-mono);text-transform:uppercase;letter-spacing:.08em;color:var(--accent-ink);background:var(--accent);padding:4px 8px;border-radius:4px;white-space:nowrap}
+.rec .act{font:700 18px/1.3 var(--f-display)}
+.rec .why{color:var(--fg);opacity:.85;font-size:14.5px}
+.rec a{color:var(--accent);font-weight:700;font-size:14px}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.stat{background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.stat b{font:700 26px var(--f-display);font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.stat.hot b{color:var(--red)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.label{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.next{background:var(--sunk);border-radius:6px;padding:8px 10px}
+.pill{display:inline-flex;align-items:center;gap:6px;font:600 11px var(--f-mono);text-transform:uppercase;letter-spacing:.05em;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.s-red{color:var(--red);background:var(--red-bg)} .s-amber{color:var(--amber);background:var(--amber-bg)} .s-green{color:var(--green);background:var(--green-bg)} .s-dormant{color:var(--muted);background:var(--sunk)}
+.why-line{font-size:13px;color:var(--muted)}
+.chip{font:600 10.5px var(--f-mono);text-transform:uppercase;letter-spacing:.05em;padding:2px 6px;border-radius:4px;white-space:nowrap}
+.t-ask_to_me{color:var(--ask);background:var(--ask-bg)} .t-my_commitment{color:var(--commit);background:var(--commit-bg)} .t-waiting_on{color:var(--wait);background:var(--wait-bg)} .t-todo{color:var(--fg);background:var(--sunk)}
+ul.items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+/* Two-line rows: chip and actions share the top line, text gets the full width below (three side-by-side queues are too narrow for a 3-column row). */
+ul.items li{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"chip acts" "text text";gap:6px 10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+ul.items li>.chip{grid-area:chip;justify-self:start}
+ul.items li>.itext{grid-area:text}
+ul.items li>.acts{grid-area:acts}
+ul.items li:first-child{border-top:0}
+.itext{min-width:0;overflow-wrap:anywhere}
+.itext a{color:var(--accent)}
+.meta{font:12px var(--f-mono);color:var(--muted)}
+.age-hot{color:var(--red);font-weight:600}
+.acts{display:flex;gap:4px}
+button{font:600 12px var(--f-body);border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:6px;padding:4px 8px;cursor:pointer}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button.primary:hover{color:var(--accent-ink);filter:brightness(1.08)}
+button:disabled{opacity:.5;cursor:default}
+.queue{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:4px 16px}
+.queues{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;align-items:start}
+.queues section{display:flex;flex-direction:column;gap:10px;min-width:0}
+details.fyi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 16px}
+details.fyi summary{cursor:pointer;font:600 17px var(--f-display)}
+.fyi-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 12px;padding:10px 0;border-top:1px solid var(--line)}
+.fyi-row:first-of-type{border-top:0}
+.ini-side{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+form.add{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px}
+form.add input[type=text]{flex:1 1 260px;min-width:0}
+select,input{font:14px var(--f-body);color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:24px;color:var(--muted)}
+.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.toolbar label{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.closed .itext{text-decoration:line-through;color:var(--muted)}
+.notice{font-size:13px;color:var(--amber)}
+.toast{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);max-width:calc(100% - 32px);display:flex;gap:8px;align-items:center;background:var(--surface);color:var(--fg);border:1px solid var(--accent);border-radius:8px;padding:10px 12px;box-shadow:0 6px 20px rgba(0,0,0,.18);font-size:13.5px;z-index:10}
+.toast input{font:13px var(--f-mono);min-width:0;flex:1 1 220px}
+button.ask{color:var(--accent);border-color:var(--accent)}
+/* Today */
+.days{display:flex;gap:6px;flex-wrap:wrap}
+.days button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.agenda{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.slot{display:grid;grid-template-columns:92px 6px minmax(0,1fr);gap:0 14px;padding:14px 16px;border-top:1px solid var(--line)}
+.slot:first-child{border-top:0}
+.slot .time{font:600 13px var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted);padding-top:2px}
+.slot .bar{border-radius:3px;background:var(--line)}
+.slot.imp-critical .bar{background:var(--red)} .slot.imp-high .bar{background:var(--accent)} .slot.imp-normal .bar{background:var(--muted)}
+.slot .body{display:flex;flex-direction:column;gap:6px;min-width:0}
+.slot .subj{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-weight:700}
+.slot.dim .subj{color:var(--muted);font-weight:400}
+.slot .prep{font-size:14px}
+.slot .decision{font-size:13.5px;background:var(--sunk);border-radius:6px;padding:6px 8px}
+.slot .warn{font-size:13px;color:var(--amber)}
+.tagline{font:600 10.5px var(--f-mono);text-transform:uppercase;letter-spacing:.05em;padding:2px 6px;border-radius:4px;background:var(--sunk);color:var(--muted)}
+.tagline.skip{background:var(--amber-bg);color:var(--amber)}
+.tagline.crit{background:var(--red-bg);color:var(--red)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px;align-items:start}
+/* Portfolio */
+.ptable-wrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:10px}
+table.ptable{border-collapse:collapse;width:100%;min-width:760px;font-size:14px}
+.ptable th{font:600 11px var(--f-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+.ptable td{padding:12px;border-top:1px solid var(--line);vertical-align:top}
+.ptable tr:first-child td{border-top:0}
+.ptable .name{font-weight:700;min-width:150px}
+.ptable .move{color:var(--accent);font-weight:700}
+.radar{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.person{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:4px}
+.person b{font-family:var(--f-display)}
+.heat{display:flex;gap:6px;flex-wrap:wrap}
+.wins{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.wins li{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;gap:10px}
+.wins .d{font:600 12px var(--f-mono);color:var(--green);white-space:nowrap;padding-top:2px}
+/* Digest */
+nav.tabs .badge{display:inline-block;margin-left:6px;min-width:20px;padding:1px 6px;border-radius:99px;background:var(--accent);color:var(--accent-ink);font:700 11px/1.5 var(--f-mono);text-align:center;vertical-align:2px}
+.dlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.dlist li{display:flex;flex-direction:column;gap:3px;padding:10px 0;border-top:1px solid var(--line);min-width:0;overflow-wrap:anywhere}
+.dlist .dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.dlist .dhead .acts{flex:none}
+.dlist li:first-child{border-top:0}
+.dlist .delta{font-size:13.5px;background:var(--sunk);border-radius:6px;padding:4px 8px;align-self:flex-start}
+.brief{white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;margin-top:10px}
+/* Reports (afternoon check-in, weekly review, status report) reuse the Digest list styles. */
+.dlist a{color:var(--accent)}
+@media (max-width:520px){.slot{grid-template-columns:64px 4px minmax(0,1fr);gap:0 10px}}
+@media (prefers-reduced-motion:no-preference){button{transition:border-color .15s,color .15s}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="app-name">Alfred</h1>
+      <div class="muted" id="app-sub">What you are driving, what you owe, and who you are waiting on.</div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+      <div class="sweep" id="sweep">Loading...</div>
+      <label class="sweep" style="display:flex;gap:6px;align-items:center">Theme
+        <select id="theme-pick" aria-label="Theme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="system">Match system</option>
+        </select>
+      </label>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button role="tab" id="tab-queues" aria-controls="view-queues" aria-selected="true" data-view="queues">Queues</button>
+    <button role="tab" id="tab-today" aria-controls="view-today" aria-selected="false" data-view="today">Today</button>
+    <button role="tab" id="tab-digest" aria-controls="view-digest" aria-selected="false" data-view="digest">Digest<span class="badge" id="c-digest" hidden></span></button>
+    <button role="tab" id="tab-afternoon" aria-controls="view-afternoon" aria-selected="false" data-view="afternoon">4 PM check-in<span class="badge" id="c-rp-afternoon" hidden></span></button>
+    <button role="tab" id="tab-review" aria-controls="view-review" aria-selected="false" data-view="review">Weekly review<span class="badge" id="c-rp-review" hidden></span></button>
+    <button role="tab" id="tab-report" aria-controls="view-report" aria-selected="false" data-view="report">Status report<span class="badge" id="c-rp-report" hidden></span></button>
+    <button role="tab" id="tab-portfolio" aria-controls="view-portfolio" aria-selected="false" data-view="portfolio">Portfolio</button>
+  </nav>
+
+  <!-- QUEUES -->
+  <section class="view" id="view-queues" role="tabpanel" aria-labelledby="tab-queues">
+    <div class="rec" id="rec-queues"></div>
+    <div class="strip" id="strip" aria-label="Summary"></div>
+    <section aria-labelledby="h-drive" style="display:flex;flex-direction:column;gap:12px">
+      <h2 id="h-drive">Driving <span class="count" id="c-drive"></span></h2>
+      <div class="cards" id="drive"></div>
+    </section>
+    <div class="queues">
+      <section aria-labelledby="h-ask"><h2 id="h-ask">Replies owed <span class="count" id="c-ask"></span></h2><div class="queue"><ul class="items" id="q-ask"></ul></div></section>
+      <section aria-labelledby="h-commit"><h2 id="h-commit">My commitments <span class="count" id="c-commit"></span></h2><div class="queue"><ul class="items" id="q-commit"></ul></div></section>
+      <section aria-labelledby="h-wait"><h2 id="h-wait">Waiting on <span class="count" id="c-wait"></span></h2><div class="queue"><ul class="items" id="q-wait"></ul></div></section>
+    </div>
+    <details class="fyi" id="fyi-box">
+      <summary>FYI initiatives <span class="count mono muted" id="c-fyi"></span></summary>
+      <div id="fyi"></div>
+    </details>
+    <details class="fyi" id="archived-box" hidden>
+      <summary>Archived initiatives <span class="count mono muted" id="c-archived"></span></summary>
+      <div class="muted" style="font-size:13.5px;margin-top:6px">Hidden from Queues, Portfolio, briefs and recommendations. New mail on one still lands there and shows in the Digest.</div>
+      <div id="archived"></div>
+    </details>
+    <div class="toolbar">
+      <label><input type="checkbox" id="show-closed"> Show done and dropped</label>
+      <span class="notice" id="notice" hidden></span>
+    </div>
+    <form class="add" id="add-form" hidden>
+      <strong style="font-family:var(--f-display)">Add</strong>
+      <select id="add-ini" aria-label="Initiative"></select>
+      <select id="add-type" aria-label="Type">
+        <option value="todo">To do</option>
+        <option value="my_commitment">My commitment</option>
+        <option value="waiting_on">Waiting on</option>
+        <option value="ask_to_me">Reply owed</option>
+      </select>
+      <input type="text" id="add-text" placeholder="e.g. Send feedback on the vendor proposal" aria-label="Item text" required>
+      <input type="date" id="add-due" aria-label="Due date">
+      <button class="primary" type="submit">Add item</button>
+    </form>
+  </section>
+
+  <!-- TODAY -->
+  <section class="view" id="view-today" role="tabpanel" aria-labelledby="tab-today" hidden>
+    <div class="rec" id="rec-today"></div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center">
+      <h2 id="today-title">Agenda</h2>
+      <div class="days" id="days" aria-label="Pick a day"></div>
+    </div>
+    <div class="agenda" id="agenda"></div>
+    <div class="cols">
+      <section style="display:flex;flex-direction:column;gap:10px"><h2>Due or owed today <span class="count" id="c-due"></span></h2><div class="queue"><ul class="items" id="q-due"></ul></div></section>
+      <section style="display:flex;flex-direction:column;gap:10px"><h2>Quick closes <span class="count">under 10 min</span></h2><div class="queue"><ul class="items" id="q-quick"></ul></div></section>
+    </div>
+  </section>
+
+  <!-- DIGEST -->
+  <section class="view" id="view-digest" role="tabpanel" aria-labelledby="tab-digest" hidden>
+    <div class="rec" id="dg-head" hidden></div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center">
+      <h2 id="dg-title">What changed</h2>
+      <div class="days" id="dg-days" aria-label="Pick a digest"></div>
+    </div>
+    <div class="cols" id="dg-groups"></div>
+    <div id="dg-extra" style="display:flex;flex-direction:column;gap:16px"></div>
+  </section>
+
+  <!-- 4 PM CHECK-IN -->
+  <section class="view" id="view-afternoon" role="tabpanel" aria-labelledby="tab-afternoon" hidden>
+    <div class="rec" id="rp-afternoon-head" hidden></div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center">
+      <h2 id="rp-afternoon-title">4 PM check-in</h2>
+      <div class="days" id="rp-afternoon-days" aria-label="Pick a check-in"></div>
+    </div>
+    <div class="cols" id="rp-afternoon-groups"></div>
+    <div id="rp-afternoon-extra" style="display:flex;flex-direction:column;gap:16px"></div>
+  </section>
+
+  <!-- WEEKLY REVIEW -->
+  <section class="view" id="view-review" role="tabpanel" aria-labelledby="tab-review" hidden>
+    <div class="rec" id="rp-review-head" hidden></div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center">
+      <h2 id="rp-review-title">Weekly review</h2>
+      <div class="days" id="rp-review-days" aria-label="Pick a weekly review"></div>
+    </div>
+    <div class="cols" id="rp-review-groups"></div>
+    <div id="rp-review-extra" style="display:flex;flex-direction:column;gap:16px"></div>
+  </section>
+
+  <!-- WEEKLY STATUS REPORT -->
+  <section class="view" id="view-report" role="tabpanel" aria-labelledby="tab-report" hidden>
+    <div class="rec" id="rp-report-head" hidden></div>
+    <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;align-items:center">
+      <h2 id="rp-report-title">Status report draft</h2>
+      <div class="days" id="rp-report-days" aria-label="Pick a report draft"></div>
+    </div>
+    <div class="cols" id="rp-report-groups"></div>
+    <div id="rp-report-extra" style="display:flex;flex-direction:column;gap:16px"></div>
+  </section>
+
+  <!-- PORTFOLIO -->
+  <section class="view" id="view-portfolio" role="tabpanel" aria-labelledby="tab-portfolio" hidden>
+    <div class="rec" id="rec-portfolio"></div>
+    <section style="display:flex;flex-direction:column;gap:10px">
+      <h2>Decisions and risks <span class="count" id="c-port"></span></h2>
+      <div class="ptable-wrap"><table class="ptable" id="ptable">
+        <thead><tr><th>Initiative</th><th>Status</th><th>Decision needed</th><th>Risk</th><th>Your next move</th><th>Open</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+    </section>
+    <div class="cols">
+      <section style="display:flex;flex-direction:column;gap:10px">
+        <h2>Stakeholder radar</h2>
+        <div class="muted" style="font-size:13.5px">People with open threads to you. Most open items first.</div>
+        <div class="radar" id="radar"></div>
+      </section>
+      <section style="display:flex;flex-direction:column;gap:10px">
+        <h2>Wins this week</h2>
+        <div class="muted" style="font-size:13.5px" id="wins-note">Feeds the accomplishments in your weekly report.</div>
+        <ul class="wins" id="wins"></ul>
+      </section>
+    </div>
+  </section>
+</div>
+
+<script>
+/* CONFIG -- SETUP.md rewrites the JSON between the CONFIG markers from config.md. Everything personal lives here or in the database. */
+const CFG=/*CONFIG*/{
+  "name":"Alfred",
+  "command":"/alfred",
+  "morning":{"when":"7:30 AM"},
+  "afternoon":{"enabled":true,"label":"4 PM check-in","when":"4 PM"},
+  "weekly":{"enabled":true,"label":"Weekly review","when":"Friday 3 PM"},
+  "report":{"enabled":true,"name":"Status report"},
+  "summaryLabel":"Summaries"
+}/*END CONFIG*/;
+const TYPE_LABEL={ask_to_me:"Reply owed",my_commitment:"Commitment",waiting_on:"Waiting",todo:"To do"};
+const STATUS_LABEL={red:"At risk",amber:"Watch",green:"On track",dormant:"Dormant"};
+const STATUS_RANK={red:0,amber:1,green:2,dormant:3};
+const IMP_RANK={critical:0,high:1,normal:2,low:3};
+let VIEWS=["queues","today","digest","afternoon","review","report","portfolio"];
+let db=null, inits=[], items=[], meetings=[], wins=[], digests=[], reports=[], meta=null, recs=null, showClosed=false, view="queues", pickedDay=null, pickedDigest=null;
+const $=id=>document.getElementById(id);
+/* Apply CFG: name, subtitle, tab labels; routines that are off lose their tab. */
+(function applyConfig(){
+  document.title=CFG.name;$("app-name").textContent=CFG.name;
+  const runs=["the "+CFG.morning.when+" morning sweep"];
+  if(CFG.weekly.enabled)runs.push("the "+CFG.weekly.when+" weekly review");
+  $("app-sub").textContent="What you are driving, what you owe, and who you are waiting on. Updated by "+runs.join(" and ")+".";
+  $("tab-afternoon").firstChild.textContent=CFG.afternoon.label;$("rp-afternoon-title").textContent=CFG.afternoon.label;
+  $("tab-review").firstChild.textContent=CFG.weekly.label;$("rp-review-title").textContent=CFG.weekly.label;
+  $("tab-report").firstChild.textContent=CFG.report.name;$("rp-report-title").textContent=CFG.report.name+" draft";
+  if(!(CFG.weekly.enabled&&CFG.report.enabled))$("wins-note").textContent="Verified accomplishments the sweeps found this week.";
+  const off=[];if(!CFG.afternoon.enabled)off.push("afternoon");if(!CFG.weekly.enabled)off.push("review","report");else if(!CFG.report.enabled)off.push("report");
+  off.forEach(v=>{$("tab-"+v).hidden=true;$("view-"+v).hidden=true;});
+  VIEWS=VIEWS.filter(v=>!off.includes(v));
+})();
+/* View preferences: stored in the database (meta/prefs) so every laptop shares them; this browser's copy only covers the first paint. */
+let prefs={theme:"dark",view:"queues",showClosed:false,digest_seen_at:"",reports_seen:{}};
+try{const s=JSON.parse(localStorage.getItem("assistant.prefs")||"null");if(s)prefs={...prefs,...s};}catch(e){}
+function applyTheme(t){if(t==="system")document.documentElement.removeAttribute("data-theme");else document.documentElement.setAttribute("data-theme",t==="light"?"light":"dark");$("theme-pick").value=t;}
+let prefsTimer=null;
+function savePrefs(patch){
+  prefs={...prefs,...patch};
+  try{localStorage.setItem("assistant.prefs",JSON.stringify(prefs))}catch(e){}
+  if(!db)return;
+  clearTimeout(prefsTimer);
+  prefsTimer=setTimeout(()=>{db.doc("meta/prefs").set({...prefs,updated_at:new Date().toISOString()}).catch(()=>{});},400);
+}
+showClosed=!!prefs.showClosed;
+$("show-closed").checked=showClosed;
+applyTheme(prefs.theme);
+$("theme-pick").addEventListener("change",e=>{applyTheme(e.target.value);savePrefs({theme:e.target.value});});
+
+function el(tag,attrs,...kids){const n=document.createElement(tag);if(attrs)for(const k in attrs){if(k==="class")n.className=attrs[k];else if(k==="text")n.textContent=attrs[k];else n.setAttribute(k,attrs[k]);}for(const c of kids){if(c==null||c===false)continue;n.append(c.nodeType?c:document.createTextNode(c));}return n;}
+function days(iso){if(!iso)return null;const t=Date.parse(iso);if(isNaN(t))return null;return Math.floor((Date.now()-t)/864e5);}
+function fmtDate(iso){if(!iso)return"";const d=new Date(iso);return isNaN(d)?"":d.toLocaleDateString(undefined,{month:"short",day:"numeric"});}
+function fmtTime(iso){const d=new Date(iso);return isNaN(d)?"":d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});}
+function localDay(d){const x=new Date(d);return x.getFullYear()+"-"+String(x.getMonth()+1).padStart(2,"0")+"-"+String(x.getDate()).padStart(2,"0");}
+function iniName(id){const i=inits.find(x=>x.id===id);return i?i.name:id;}
+function isOpen(it){return (it.state||"open")==="open";}
+function visible(it){return showClosed||isOpen(it);}
+function safeLink(u){return typeof u==="string"&&/^https:\/\//.test(u)?u:"";}
+
+/* Tier toggle: the owner moves an initiative between Driving and FYI here. The sweeps read tier from the store and never change it. */
+function tierButton(ini){
+  if(!db)return null;
+  const toDrive=ini.tier!=="drive";
+  return el("button",{type:"button","data-tier":toDrive?"drive":"fyi","data-id":ini.id,"aria-label":(toDrive?"Drive ":"Move to FYI: ")+ini.name},toDrive?"Drive this":"Move to FYI");
+}
+/* Archive: the owner hides a finished or dormant FYI initiative here (archived, archived_at). Like tier, the sweeps read it and never change it. */
+function activeInits(){return inits.filter(i=>!i.archived);}
+function archiveButton(ini){
+  if(!db)return null;
+  const arch=!ini.archived;
+  return el("button",{type:"button","data-archive":arch?"1":"0","data-id":ini.id,"aria-label":(arch?"Archive: ":"Unarchive: ")+ini.name},arch?"Archive":"Unarchive");
+}
+/* Status pill: the sweep stores status and status_why (what set it); the why rides along as a tooltip. */
+function statusPill(ini){
+  const s=ini.status||"amber";
+  return el("span",{class:"pill s-"+s,text:STATUS_LABEL[s]||"Watch",title:ini.status_why||""});
+}
+function itemRow(it,{showIni}={}){
+  const age=days(it.created);
+  const due=it.due?fmtDate(it.due):"";
+  const overdue=it.due&&isOpen(it)&&Date.parse(it.due)<Date.now();
+  const text=el("div",{class:"itext"});
+  const href=safeLink(it.link);
+  if(href){text.append(el("a",{href,target:"_blank",rel:"noopener",text:it.text}));}else{text.append(it.text||"");}
+  const bits=[];
+  if(it.counterpart)bits.push(it.counterpart);
+  if(showIni)bits.push(iniName(it.initiative_id));
+  const m=el("div",{class:"meta"},bits.join(" · "));
+  if(age!=null){m.append(bits.length?" · ":"");m.append(el("span",{class:(age>=2&&isOpen(it)&&it.type!=="waiting_on")?"age-hot":"",text:age+"d old"}));}
+  if(due){m.append(" · ");m.append(el("span",{class:overdue?"age-hot":"",text:"due "+due}));}
+  text.append(m);
+  const acts=el("div",{class:"acts"});
+  if(db&&isOpen(it))acts.append(el("button",{type:"button",class:"ask","data-ask":it.id,title:"Copy "+CFG.command+" "+it.id+" to paste into Claude Code","aria-label":"Copy Claude Code command for: "+it.text},"Claude"));
+  if(db){
+    if(isOpen(it)){
+      acts.append(el("button",{type:"button","data-act":"done","data-id":it.id,"aria-label":"Mark done: "+it.text},"Done"));
+      acts.append(el("button",{type:"button","data-act":"dropped","data-id":it.id,"aria-label":"Drop: "+it.text},"Drop"));
+    }else{
+      acts.append(el("button",{type:"button","data-act":"open","data-id":it.id,"aria-label":"Reopen: "+it.text},"Reopen"));
+    }
+  }
+  return el("li",{class:isOpen(it)?"":"closed"},el("span",{class:"chip t-"+it.type,text:TYPE_LABEL[it.type]||it.type}),text,acts);
+}
+function byAgeDesc(a,b){return (Date.parse(a.created)||0)-(Date.parse(b.created)||0);}
+function fill(listId,arr,opts,emptyText){
+  const ul=$(listId);ul.replaceChildren();
+  if(!arr.length){ul.append(el("li",{class:"meta",style:"display:block"},emptyText));return;}
+  arr.forEach(it=>ul.append(itemRow(it,opts)));
+}
+
+/* Recommended action: Claude's sweep writes meta/recommendations; the page falls back to a rule when none is stored. */
+function fallbackRec(v){
+  const open=items.filter(isOpen);
+  if(v==="queues"){
+    const a=open.filter(i=>i.type==="ask_to_me").sort(byAgeDesc)[0]||open.filter(i=>i.type==="my_commitment").sort(byAgeDesc)[0];
+    return a?{action:"Close: "+a.text,why:"Oldest open item where someone is waiting on you ("+(days(a.created)??0)+" days). Picked live by the page until the next sweep.",link:a.link}:null;
+  }
+  if(v==="today"){
+    const d=pickedDay;const ms=meetings.filter(m=>m.date===d&&m.kind==="meeting").sort((a,b)=>(IMP_RANK[a.importance]??9)-(IMP_RANK[b.importance]??9));
+    const m=ms[0];return m?{action:"Prep for "+m.subject+" at "+fmtTime(m.start),why:m.decision?("Decision to land: "+m.decision):"Your most important meeting on this day.",link:""}:null;
+  }
+  const r=activeInits().filter(i=>i.tier==="drive").sort((a,b)=>(STATUS_RANK[a.status]??4)-(STATUS_RANK[b.status]??4))[0];
+  return r&&r.pm_move?{action:r.pm_move,why:"Highest-risk initiative you drive: "+r.name+".",link:""}:null;
+}
+/* A stored recommendation that points at an item (item_id) is retired the moment that item is closed, on any tab or laptop; the page then shows the next-best action. */
+function liveStoredRec(v){
+  const r=recs&&recs[v];if(!r)return null;
+  if(r.item_id){const it=items.find(i=>i.id===r.item_id);if(it&&!isOpen(it))return null;}
+  if(r.meeting_id){const m=meetings.find(x=>x.id===r.meeting_id);if(m&&Date.parse(m.end)<Date.now())return null;}
+  return r;
+}
+function renderRec(v){
+  const box=$("rec-"+v);box.replaceChildren();
+  const r=liveStoredRec(v)||fallbackRec(v);
+  if(!r){box.hidden=true;return;}box.hidden=false;
+  box.append(el("span",{class:"tag",text:"Recommended"}),el("div",{class:"act",text:r.action}),el("div",{class:"why",text:r.why||""}));
+  const href=safeLink(r.link);box.append(href?el("a",{href,target:"_blank",rel:"noopener",text:"Open the source"}):el("span"));
+}
+
+function renderQueues(){
+  const open=items.filter(isOpen);
+  const asks=open.filter(i=>i.type==="ask_to_me"), commits=open.filter(i=>i.type==="my_commitment"), waits=open.filter(i=>i.type==="waiting_on");
+  const stale=asks.filter(i=>(days(i.created)||0)>=2).length;
+  const act=activeInits(), archived=inits.filter(i=>i.archived);
+  const drive=act.filter(i=>i.tier==="drive"), fyi=act.filter(i=>i.tier!=="drive");
+  const strip=$("strip");strip.replaceChildren();
+  [["Replies owed",asks.length,stale>0],["2+ days unanswered",stale,stale>0],["My commitments",commits.length,false],["Waiting on others",waits.length,false],["Initiatives",act.length,false]]
+    .forEach(([l,n,hot])=>strip.append(el("div",{class:"stat"+(hot?" hot":"")},el("b",{text:String(n)}),el("span",{text:l}))));
+  $("c-drive").textContent=drive.length?drive.length+" initiatives":"";
+  const dv=$("drive");dv.replaceChildren();
+  if(inits.length&&!drive.length)dv.append(el("div",{class:"empty"},"You are not driving any initiative. Open FYI initiatives below and choose Drive this."));
+  if(!inits.length){dv.append(el("div",{class:"empty"},db?"No initiatives yet. The next sweep seeds them from your email and Teams.":"This view cannot reach its data. Open the artifact signed in to see your initiatives."));}
+  drive.forEach(ini=>{
+    const its=items.filter(i=>i.initiative_id===ini.id&&visible(i)).sort(byAgeDesc);
+    const card=el("article",{class:"card"},
+      el("div",{class:"card-head"},el("div",null,el("h3",{text:ini.name}),ini.outcome?el("div",{class:"muted",style:"font-size:13.5px"},ini.outcome):null),
+        el("div",{class:"ini-side"},statusPill(ini),tierButton(ini))),
+      ini.status_why?el("div",{class:"why-line",text:ini.status_why}):null,
+      ini.next_action?el("div",{class:"next"},el("div",{class:"label",text:"Next action"}),ini.next_action):null,
+      el("div",{class:"meta",text:"Last touch "+(ini.last_touch?fmtDate(ini.last_touch):"unknown")+" · "+its.filter(isOpen).length+" open"}));
+    const ul=el("ul",{class:"items"});its.forEach(it=>ul.append(itemRow(it)));
+    if(its.length)card.append(ul);
+    dv.append(card);
+  });
+  $("c-ask").textContent=asks.length;$("c-commit").textContent=commits.length;$("c-wait").textContent=waits.length;
+  const pick=t=>items.filter(i=>i.type===t&&visible(i)).sort(byAgeDesc);
+  fill("q-ask",pick("ask_to_me"),{showIni:true},"Nothing owed.");
+  fill("q-commit",pick("my_commitment"),{showIni:true},"No open commitments.");
+  fill("q-wait",pick("waiting_on"),{showIni:true},"Not waiting on anyone.");
+  $("c-fyi").textContent="("+fyi.length+")";
+  const fv=$("fyi");fv.replaceChildren();
+  fyi.forEach(ini=>{
+    const its=items.filter(i=>i.initiative_id===ini.id&&visible(i)).sort(byAgeDesc);
+    const flag=ini.status&&ini.status!=="green";
+    const row=el("div",{class:"fyi-row"},
+      el("div",{style:"min-width:0"},el("strong",{text:ini.name}),ini.next_action?el("div",{class:"muted",style:"font-size:13.5px"},ini.next_action):null,
+        flag&&ini.status_why?el("div",{class:"why-line",text:ini.status_why}):null),
+      el("div",{class:"ini-side"},flag?statusPill(ini):null,el("span",{class:"meta",text:its.filter(isOpen).length+" open"}),tierButton(ini),archiveButton(ini)));
+    if(its.length){const ul=el("ul",{class:"items",style:"grid-column:1/-1"});its.forEach(it=>ul.append(itemRow(it)));row.append(ul);}
+    fv.append(row);
+  });
+  $("archived-box").hidden=!archived.length;
+  $("c-archived").textContent="("+archived.length+")";
+  const av=$("archived");av.replaceChildren();
+  archived.forEach(ini=>{
+    const n=items.filter(i=>i.initiative_id===ini.id&&isOpen(i)).length;
+    av.append(el("div",{class:"fyi-row"},
+      el("div",{style:"min-width:0"},el("strong",{text:ini.name}),el("div",{class:"meta",text:"Archived "+(fmtDate(ini.archived_at)||"")+" · last touch "+(ini.last_touch?fmtDate(ini.last_touch):"unknown")})),
+      el("div",{class:"ini-side"},el("span",{class:"meta",text:n+" open"}),archiveButton(ini))));
+  });
+  const sel=$("add-ini");const cur=sel.value;sel.replaceChildren();
+  act.forEach(i=>sel.append(el("option",{value:i.id,text:i.name})));
+  if(cur)sel.value=cur;
+  $("add-form").hidden=!(db&&act.length);
+}
+
+function renderToday(){
+  const dates=[...new Set(meetings.map(m=>m.date))].sort();
+  const today=localDay(Date.now());
+  if(!pickedDay||!dates.includes(pickedDay))pickedDay=dates.find(d=>d>=today)||dates[dates.length-1]||today;
+  const dv=$("days");dv.replaceChildren();
+  dates.filter(d=>d>=today||d===pickedDay).forEach(d=>{
+    const lbl=d===today?"Today":new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+    dv.append(el("button",{type:"button","data-day":d,"aria-pressed":String(d===pickedDay)},lbl));
+  });
+  $("today-title").textContent=pickedDay?new Date(pickedDay+"T12:00:00").toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"}):"Agenda";
+  const ag=$("agenda");ag.replaceChildren();
+  const ms=meetings.filter(m=>m.date===pickedDay).sort((a,b)=>Date.parse(a.start)-Date.parse(b.start));
+  if(!ms.length){ag.append(el("div",{class:"empty",style:"border:0"},db?"No meetings stored for this day yet. The "+CFG.morning.when+" sweep loads each day's calendar with prep notes.":"Agenda unavailable in this view."));}
+  ms.forEach(m=>{
+    const dim=["ooo","social","optional","allday"].includes(m.kind);
+    const tags=[];
+    if(m.importance==="critical")tags.push(el("span",{class:"tagline crit",text:"Anchor"}));
+    if(m.skippable)tags.push(el("span",{class:"tagline skip",text:"Skippable"}));
+    if(m.initiative_id&&m.initiative_id!=="admin")tags.push(el("span",{class:"tagline",text:iniName(m.initiative_id)}));
+    const time=m.kind==="allday"?"All day":fmtTime(m.start);
+    ag.append(el("div",{class:"slot imp-"+(m.importance||"normal")+(dim?" dim":"")},
+      el("div",{class:"time",text:time}),el("div",{class:"bar"}),
+      el("div",{class:"body"},el("div",{class:"subj"},m.subject,...tags),
+        m.prep?el("div",{class:"prep",text:m.prep}):null,
+        m.decision?el("div",{class:"decision"},el("span",{class:"label",text:"Decision to land  "}),m.decision):null,
+        m.note?el("div",{class:"warn",text:m.note}):null)));
+  });
+  const endOfDay=Date.parse(pickedDay+"T23:59:59");
+  const due=items.filter(i=>isOpen(i)&&((i.due&&Date.parse(i.due)<=endOfDay)||(i.type==="ask_to_me"&&(days(i.created)||0)>=1))).sort(byAgeDesc);
+  $("c-due").textContent=due.length;
+  fill("q-due",due,{showIni:true},"Nothing due.");
+  const quick=items.filter(i=>isOpen(i)&&(i.id.startsWith("d-")||(i.type==="todo"&&/unsent|draft|outbox|submit|guess/i.test(i.text)))).slice(0,5);
+  fill("q-quick",quick,{showIni:true},"No quick closes.");
+}
+
+function renderPortfolio(){
+  const order={drive:0,fyi:1};
+  const rows=activeInits().sort((a,b)=>(order[a.tier]-order[b.tier])||((STATUS_RANK[a.status]??4)-(STATUS_RANK[b.status]??4)));
+  $("c-port").textContent=rows.length+" initiatives";
+  const tb=$("ptable").querySelector("tbody");tb.replaceChildren();
+  rows.forEach(ini=>{
+    const n=items.filter(i=>i.initiative_id===ini.id&&isOpen(i)).length;
+    tb.append(el("tr",null,
+      el("td",{class:"name"},ini.name,el("div",{class:"meta",text:ini.tier==="drive"?"You drive":"FYI"})),
+      el("td",null,statusPill(ini),ini.status_why?el("div",{class:"why-line",style:"margin-top:4px",text:ini.status_why}):null),
+      el("td",{text:ini.decision_needed||"--"}),
+      el("td",{text:ini.risk||"--"}),
+      el("td",{class:"move",text:ini.pm_move||ini.next_action||"--"}),
+      el("td",{class:"mono",text:String(n)})));
+  });
+  const people={};
+  items.filter(isOpen).forEach(i=>{const c=(i.counterpart||"").trim();if(!c||/^(you|your meeting note|github|leadership)$/i.test(c))return;(people[c]=people[c]||[]).push(i);});
+  const rv=$("radar");rv.replaceChildren();
+  Object.entries(people).sort((a,b)=>b[1].length-a[1].length).forEach(([name,its])=>{
+    const counts={};its.forEach(i=>counts[i.type]=(counts[i.type]||0)+1);
+    const oldest=Math.max(...its.map(i=>days(i.created)||0));
+    rv.append(el("div",{class:"person"},el("b",{text:name}),
+      el("div",{class:"heat"},...Object.entries(counts).map(([t,c])=>el("span",{class:"chip t-"+t,text:c+" "+(TYPE_LABEL[t]||t)}))),
+      el("div",{class:"meta"},el("span",{class:oldest>=2?"age-hot":"",text:"oldest "+oldest+"d"}),"  ·  "+[...new Set(its.map(i=>iniName(i.initiative_id)))].join(", "))));
+  });
+  if(!rv.childNodes.length)rv.append(el("div",{class:"empty"},"Nobody is waiting on you."));
+  const wl=$("wins");wl.replaceChildren();
+  [...wins].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).forEach(w=>wl.append(el("li",null,el("span",{class:"d",text:fmtDate(w.date+"T12:00:00")}),el("span",null,w.text,w.source?el("span",{class:"meta",text:"  ·  "+w.source}):null))));
+  if(!wins.length)wl.append(el("li",{class:"muted"},"No wins logged yet. The sweeps add them from your sent mail and recognition emails."));
+}
+
+/* Digest: the morning sweep writes digests/<date>-am and the Friday weekly review digests/<date>-wk with what each changed. A digest day is one morning
+   brief plus any weekly (or older afternoon) digest before it, so those file under the next business day ("Since this morning" until that brief runs). */
+const CHANGE_GROUPS=[["added","New"],["closed","Closed"],["status","Status and next action"],["next_action","Status and next action"],["due","Due dates"],["initiative_new","New initiatives"],["archived_activity","Activity on archived initiatives"],["meeting","Meetings"],["win","Wins"]];
+const RUN_LABEL={morning:"Morning sweep",weekly:CFG.weekly.label,afternoon:CFG.afternoon.label};
+function nextBizDay(d){const x=new Date(d+"T12:00:00");do{x.setDate(x.getDate()+1);}while(x.getDay()===0||x.getDay()===6);return localDay(x);}
+function digestDay(dg){return dg.kind==="morning"?dg.date:nextBizDay(dg.date);}
+function changeCount(dg){return Array.isArray(dg.changes)?dg.changes.length:0;}
+function unseenDigestChanges(){
+  const seen=prefs.digest_seen_at||"";
+  if(seen)return digests.filter(d=>(d.generated_at||"")>seen).reduce((n,d)=>n+changeCount(d),0);
+  const days=[...new Set(digests.map(digestDay))].sort();const last=days[days.length-1];
+  return digests.filter(d=>digestDay(d)===last).reduce((n,d)=>n+changeCount(d),0);
+}
+/* Opening the Digest tab marks everything stored so far as read; meta/prefs carries that to every laptop. */
+function markDigestSeen(){
+  const newest=digests.reduce((m,d)=>(d.generated_at||"")>m?d.generated_at:m,"");
+  if(newest&&newest!==prefs.digest_seen_at)savePrefs({digest_seen_at:newest});
+}
+function renderDigestBadge(){
+  const n=view==="digest"?0:unseenDigestChanges();const b=$("c-digest");
+  b.textContent=n>99?"99+":String(n);b.hidden=!n;
+  $("tab-digest").setAttribute("aria-label",n?"Digest, "+n+" new changes":"Digest");
+}
+/* The digest is a change log, like the Jira section: one line per change. A still-open item gets Done and Drop (the same handlers as Queues and Today);
+   every line shows the item's current state ("Done since", "Reopened since") from the same live items list every tab renders from. */
+function sinceNote(c,it){
+  if(!it)return "";
+  if(c.kind==="closed")return isOpen(it)?"Reopened since":"";
+  return it.state==="done"?"Done since":it.state==="dropped"?"Dropped since":"";
+}
+function changeRow(c,dg){
+  const it=c.item_id?items.find(i=>i.id===c.item_id):null;
+  const line=el("div",null);
+  if(it)line.append(el("span",{class:"chip t-"+it.type,text:TYPE_LABEL[it.type]||it.type}),"  ");
+  line.append(c.text||(it&&it.text)||"");
+  const since=sinceNote(c,it);
+  if(since)line.append("  ",el("span",{class:"tagline",text:since}));
+  const head=el("div",{class:"dhead"},line);
+  if(db&&it&&isOpen(it))head.append(el("div",{class:"acts"},
+    el("button",{type:"button","data-act":"done","data-id":it.id,"aria-label":"Mark done: "+it.text},"Done"),
+    el("button",{type:"button","data-act":"dropped","data-id":it.id,"aria-label":"Drop: "+it.text},"Drop")));
+  const li=el("li",null,head);
+  if(c.before!=null||c.after!=null)li.append(el("div",{class:"delta",text:(c.before||"none")+"  →  "+(c.after||"none")}));
+  const ini=c.initiative_id||(it&&it.initiative_id);
+  li.append(el("div",{class:"meta",text:[ini?iniName(ini):"",c.why,RUN_LABEL[dg.kind]].filter(Boolean).join(" · ")}));
+  return li;
+}
+function groupBox(title,count,list){
+  return el("section",{style:"display:flex;flex-direction:column;gap:10px;min-width:0"},el("h2",null,title,el("span",{class:"count",text:String(count)})),el("div",{class:"queue"},list));
+}
+function renderDigest(){
+  renderDigestBadge();
+  const days=[...new Set(digests.map(digestDay))].sort().reverse().slice(0,10);
+  const today=localDay(Date.now());
+  if(!pickedDigest||!days.includes(pickedDigest))pickedDigest=days[0]||null;
+  const dv=$("dg-days");dv.replaceChildren();
+  days.forEach(d=>{
+    const lbl=d>today?"Since this morning":d===today?"Today":new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+    dv.append(el("button",{type:"button","data-dg":d,"aria-pressed":String(d===pickedDigest)},lbl));
+  });
+  const head=$("dg-head"), groups=$("dg-groups"), extra=$("dg-extra");
+  head.replaceChildren();groups.replaceChildren();extra.replaceChildren();
+  if(!pickedDigest){
+    head.hidden=true;$("dg-title").textContent="What changed";
+    groups.append(el("div",{class:"empty"},db?"No digest yet. The next sweep writes one.":"Digest unavailable in this view."));
+    return;
+  }
+  const docs=digests.filter(d=>digestDay(d)===pickedDigest).sort((a,b)=>(a.generated_at||"").localeCompare(b.generated_at||""));
+  const latest=docs[docs.length-1];
+  $("dg-title").textContent=pickedDigest>today?"Since this morning":"What changed for "+new Date(pickedDigest+"T12:00:00").toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+  const runs=docs.map(d=>(RUN_LABEL[d.kind]||d.kind)+" "+(d.generated_at?new Date(d.generated_at).toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit"}):"")).join("  ·  ");
+  head.hidden=false;
+  head.append(el("span",{class:"tag",text:"Digest"}),el("div",{class:"act",text:latest.headline||"No headline recorded."}),el("div",{class:"why",text:"Covers "+runs}),el("span"));
+  const byGroup=new Map();
+  docs.forEach(dg=>(dg.changes||[]).forEach(c=>{
+    const g=(CHANGE_GROUPS.find(([k])=>k===c.kind)||[null,"Other"])[1];
+    if(!byGroup.has(g))byGroup.set(g,[]);byGroup.get(g).push([c,dg]);
+  }));
+  const order=[...new Set(CHANGE_GROUPS.map(([,g])=>g)),"Other"];
+  order.filter(g=>byGroup.has(g)).forEach(g=>{
+    const rows=byGroup.get(g), ul=el("ul",{class:"dlist"});
+    rows.forEach(([c,dg])=>ul.append(changeRow(c,dg)));
+    groups.append(groupBox(g,rows.length,ul));
+  });
+  if(!byGroup.size)groups.append(el("div",{class:"empty"},"The sweeps recorded no item changes for this digest."));
+  const jira=docs.flatMap(d=>d.summaries||d.jira||[]);
+  if(jira.length){
+    const ul=el("ul",{class:"dlist"});
+    jira.forEach(j=>ul.append(el("li",null,el("div",null,el("strong",{class:"mono",text:j.key||""}),"  "+(j.change||"")),el("div",{class:"meta",text:[j.who,j.when?new Date(j.when).toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit"}):""].filter(Boolean).join(" · ")}))));
+    extra.append(groupBox(CFG.summaryLabel||"Summaries",jira.length,ul));
+  }
+  const srcs=docs.flatMap(d=>(d.sources||[]).map(s=>[s,d]));
+  if(srcs.length){
+    const ul=el("ul",{class:"dlist"});
+    srcs.forEach(([s,d])=>ul.append(el("li",null,el("div",null,el("strong",{text:s.name||""}),"  "+(s.status||"")),el("div",{class:"meta",text:[s.note,RUN_LABEL[d.kind]].filter(Boolean).join(" · ")}))));
+    extra.append(groupBox("Sources and gaps",srcs.length,ul));
+  }
+  docs.filter(d=>d.brief_md).forEach(d=>extra.append(el("details",{class:"fyi"},el("summary",null,"Full morning brief"),el("div",{class:"brief",text:d.brief_md}))));
+}
+
+/* Reports: the afternoon check-in writes reports/<date>-pm, the weekly run reports/<date>-review and reports/<date>-status. One renderer serves all three tabs.
+   A line that names an open item gets the same Claude, Done and Drop buttons as the Queues tab, so the page has no new write paths. */
+const REPORT_TABS={};
+if(CFG.afternoon.enabled)REPORT_TABS.afternoon={kind:"afternoon",title:CFG.afternoon.label,tag:"Check-in",empty:"No check-in saved yet. The "+CFG.afternoon.when+" run writes one."};
+if(CFG.weekly.enabled)REPORT_TABS.review={kind:"weekly_review",title:CFG.weekly.label,tag:"Review",empty:"No weekly review saved yet. The "+CFG.weekly.when+" run writes one."};
+if(CFG.weekly.enabled&&CFG.report.enabled)REPORT_TABS.report={kind:"status_report",title:CFG.report.name+" draft",tag:"Draft",empty:"No "+CFG.report.name+" draft saved yet. The "+CFG.weekly.when+" run writes one."};
+const pickedReport={};
+function reportsOf(kind){return reports.filter(r=>r.kind===kind).sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.generated_at||"").localeCompare(a.generated_at||""));}
+function newestReport(kind){return reportsOf(kind).reduce((m,r)=>(r.generated_at||"")>m?r.generated_at:m,"");}
+function markReportSeen(v){
+  const k=REPORT_TABS[v].kind, newest=newestReport(k), seen=prefs.reports_seen||{};
+  if(newest&&newest!==seen[k])savePrefs({reports_seen:{...seen,[k]:newest}});
+}
+function renderReportBadges(){
+  Object.keys(REPORT_TABS).forEach(v=>{
+    const k=REPORT_TABS[v].kind, newest=newestReport(k);
+    const isNew=view!==v&&!!newest&&newest>((prefs.reports_seen||{})[k]||"");
+    const b=$("c-rp-"+v);b.textContent="New";b.hidden=!isNew;
+    $("tab-"+v).setAttribute("aria-label",REPORT_TABS[v].title+(isNew?", new":""));
+  });
+}
+function reportLine(ln){
+  const it=ln.item_id?items.find(i=>i.id===ln.item_id):null;
+  const line=el("div",null);
+  if(it)line.append(el("span",{class:"chip t-"+it.type,text:TYPE_LABEL[it.type]||it.type}),"  ");
+  const txt=ln.text||(it&&it.text)||"", href=safeLink(ln.link||(it&&it.link));
+  line.append(href?el("a",{href,target:"_blank",rel:"noopener",text:txt}):txt);
+  if(ln.label)line.append("  ",el("span",{class:"tagline",text:ln.label}));
+  if(it&&!isOpen(it))line.append("  ",el("span",{class:"tagline",text:it.state==="dropped"?"Dropped":"Done"}));
+  const head=el("div",{class:"dhead"},line);
+  if(db&&it&&isOpen(it))head.append(el("div",{class:"acts"},
+    el("button",{type:"button",class:"ask","data-ask":it.id,title:"Copy "+CFG.command+" "+it.id+" to paste into Claude Code","aria-label":"Copy Claude Code command for: "+it.text},"Claude"),
+    el("button",{type:"button","data-act":"done","data-id":it.id,"aria-label":"Mark done: "+it.text},"Done"),
+    el("button",{type:"button","data-act":"dropped","data-id":it.id,"aria-label":"Drop: "+it.text},"Drop")));
+  const li=el("li",null,head);
+  const ini=ln.initiative_id||(it&&it.initiative_id);
+  if(ini)li.append(el("div",{class:"meta",text:iniName(ini)}));
+  return li;
+}
+function renderReport(v){
+  const cfg=REPORT_TABS[v], list=reportsOf(cfg.kind).slice(0,10);
+  if(!pickedReport[v]||!list.some(r=>r.id===pickedReport[v]))pickedReport[v]=list[0]?list[0].id:null;
+  const today=localDay(Date.now());
+  const dv=$("rp-"+v+"-days");dv.replaceChildren();
+  list.forEach(r=>dv.append(el("button",{type:"button","data-rp":v,"data-rid":r.id,"aria-pressed":String(r.id===pickedReport[v])},
+    r.date===today?"Today":new Date(r.date+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}))));
+  const head=$("rp-"+v+"-head"), groups=$("rp-"+v+"-groups"), extra=$("rp-"+v+"-extra");
+  head.replaceChildren();groups.replaceChildren();extra.replaceChildren();
+  const r=list.find(x=>x.id===pickedReport[v]);
+  if(!r){
+    head.hidden=true;$("rp-"+v+"-title").textContent=cfg.title;
+    groups.append(el("div",{class:"empty"},db?cfg.empty:cfg.title+" unavailable in this view."));
+    return;
+  }
+  $("rp-"+v+"-title").textContent=v==="report"&&r.title?r.title:cfg.title+" for "+new Date(r.date+"T12:00:00").toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+  const when=r.generated_at?"Generated "+new Date(r.generated_at).toLocaleString(undefined,{weekday:"short",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}):"";
+  const why=v==="report"?[when,"Draft. You send it yourself.",r.file_path?"Local file: "+r.file_path:""].filter(Boolean).join("  ·  "):when;
+  head.hidden=false;
+  head.append(el("span",{class:"tag",text:cfg.tag}),el("div",{class:"act",text:r.headline||r.title||"No headline recorded."}),el("div",{class:"why",text:why}),
+    v==="report"&&r.body_md?el("div",{class:"acts"},el("button",{type:"button",class:"primary","data-copy-report":r.id},"Copy "+CFG.report.name)):el("span"));
+  const secs=Array.isArray(r.sections)?r.sections:[];
+  secs.forEach(s=>{
+    const lines=Array.isArray(s.lines)?s.lines:[], ul=el("ul",{class:"dlist"});
+    lines.forEach(ln=>ul.append(reportLine(ln)));
+    if(!lines.length)ul.append(el("li",{class:"meta"},"Nothing here."));
+    groups.append(groupBox(s.heading||"",lines.length,ul));
+  });
+  if(!secs.length&&!r.body_md)groups.append(el("div",{class:"empty"},"This report was saved with no content."));
+  const srcs=Array.isArray(r.sources)?r.sources:[];
+  if(srcs.length){
+    const ul=el("ul",{class:"dlist"});
+    srcs.forEach(s=>ul.append(el("li",null,el("div",null,el("strong",{text:s.name||""}),"  "+(s.status||"")),s.note?el("div",{class:"meta",text:s.note}):null)));
+    extra.append(groupBox("Sources and gaps",srcs.length,ul));
+  }
+  if(r.body_md){
+    const d=el("details",{class:"fyi"},el("summary",null,v==="report"?"Full "+CFG.report.name+" text":"Full text"),el("div",{class:"brief",text:r.body_md}));
+    if(!secs.length)d.open=true;
+    extra.append(d);
+  }
+}
+
+function render(){
+  $("sweep").textContent=meta&&meta.last_sweep_at?("Last sweep "+new Date(meta.last_sweep_at).toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit"})+(meta.last_sweep_kind?" · "+meta.last_sweep_kind:"")):(db?"No sweep recorded yet":"Data unavailable in this view");
+  renderQueues();renderToday();renderDigest();renderPortfolio();
+  Object.keys(REPORT_TABS).forEach(renderReport);
+  ["queues","today","portfolio"].forEach(renderRec);
+  if(view==="digest")markDigestSeen();
+  if(REPORT_TABS[view])markReportSeen(view);
+  renderReportBadges();
+}
+
+function setView(v){
+  view=v;
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.view===v)));
+  VIEWS.forEach(x=>$("view-"+x).hidden=x!==v);
+  if(v==="digest")markDigestSeen();
+  if(REPORT_TABS[v])markReportSeen(v);
+  renderDigestBadge();renderReportBadges();
+}
+document.querySelector("nav.tabs").addEventListener("click",e=>{const b=e.target.closest("button[data-view]");if(b){setView(b.dataset.view);savePrefs({view:b.dataset.view});}});
+$("days").addEventListener("click",e=>{const b=e.target.closest("button[data-day]");if(b){pickedDay=b.dataset.day;renderToday();renderRec("today");}});
+$("dg-days").addEventListener("click",e=>{const b=e.target.closest("button[data-dg]");if(b){pickedDigest=b.dataset.dg;renderDigest();}});
+document.addEventListener("click",e=>{const b=e.target.closest("button[data-rp]");if(b){pickedReport[b.dataset.rp]=b.dataset.rid;renderReport(b.dataset.rp);}});
+function note(msg){const n=$("notice");n.textContent=msg;n.hidden=!msg;}
+
+/* Hand-off to Claude Code: copies "<command> <id>"; the user-level item skill loads the item, its initiative and the source thread. Falls back to a selectable field when the clipboard is blocked. */
+let toastTimer=null;
+function toast(msg,cmd){
+  let t=$("toast");if(!t){t=el("div",{class:"toast",id:"toast",role:"status","aria-live":"polite"});document.body.append(t);}
+  clearTimeout(toastTimer);t.replaceChildren(el("span",null,msg));t.hidden=false;
+  if(cmd){const f=el("input",{type:"text",readonly:"",value:cmd,"aria-label":"Claude Code command"});t.append(f);f.focus();f.select();}
+  t.append(el("button",{type:"button","data-toast-close":"1"},"Close"));
+  if(!cmd)toastTimer=setTimeout(()=>{t.hidden=true;},3500);
+}
+document.addEventListener("click",async e=>{
+  if(e.target.closest("button[data-toast-close]")){$("toast").hidden=true;return;}
+  const b=e.target.closest("button[data-ask]");if(!b)return;
+  const cmd=CFG.command+" "+b.dataset.ask;
+  try{await navigator.clipboard.writeText(cmd);toast("Copied "+cmd+" -- paste it into a new Claude Code session.");}
+  catch(err){toast("Copy this into a new Claude Code session:",cmd);}
+});
+/* Copy puts the report draft on the clipboard as rich text, so the "- " lines (two spaces per level) paste as real nested bullets in Outlook and OneNote.
+   Plain text rides along for anything that only takes text. The owner pastes and sends it themselves. */
+function esc(s){return s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function reportHtml(md){
+  const out=[];let depth=0;
+  const closeTo=n=>{while(depth>n){out.push("</li></ul>");depth--;}};
+  md.split(/\r?\n/).forEach(line=>{
+    const m=line.match(/^( *)- (.*)$/);
+    if(!m){closeTo(0);if(line.trim())out.push('<p style="margin:10pt 0 4pt"><b>'+esc(line)+"</b></p>");return;}
+    const lvl=Math.floor(m[1].length/2)+1;
+    if(lvl>depth){while(depth<lvl){out.push('<ul style="margin:0"><li>');depth++;}}
+    else{closeTo(lvl);out.push("</li><li>");}
+    out.push(esc(m[2]));
+  });
+  closeTo(0);
+  return '<div style="font-family:Calibri,Arial,sans-serif;font-size:11pt">'+out.join("")+"</div>";
+}
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-copy-report]");if(!b)return;
+  const r=reports.find(x=>x.id===b.dataset.copyReport);if(!r||!r.body_md)return;
+  try{
+    await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([reportHtml(r.body_md)],{type:"text/html"}),"text/plain":new Blob([r.body_md],{type:"text/plain"})})]);
+    toast("Copied the "+CFG.report.name+" draft with bullets. Paste it into your email and send it yourself.");
+  }catch(err){
+    try{await navigator.clipboard.writeText(r.body_md);toast("Copied the "+CFG.report.name+" draft as plain text (this browser blocked rich copy), so bullets paste as dashes.");}
+    catch(err2){toast("The browser blocked the copy. Open the full text below and copy it from there.");}
+  }
+});
+
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-act]");if(!b||!db)return;
+  const id=b.dataset.id, act=b.dataset.act;b.disabled=true;
+  try{
+    await db.doc("items/"+id).update(act==="open"?{state:"open",closed_at:null,closed_by:null}:{state:act,closed_at:new Date().toISOString(),closed_by:"page"});
+    note("");
+  }catch(err){note(err&&err.code==="invalid_argument"?"You can view this page but not change it.":"Could not save that change. Try again in a moment.");b.disabled=false;}
+});
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-tier]");if(!b||!db)return;
+  const id=b.dataset.id, tier=b.dataset.tier;b.disabled=true;
+  try{
+    await db.doc("initiatives/"+id).update({tier,tier_set_at:new Date().toISOString()});
+    note("");toast(iniName(id)+(tier==="drive"?" moved to Driving.":" moved to FYI initiatives."));
+  }catch(err){note(err&&err.code==="invalid_argument"?"You can view this page but not change it.":"Could not move that initiative. Try again in a moment.");b.disabled=false;}
+});
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("button[data-archive]");if(!b||!db)return;
+  const id=b.dataset.id, arch=b.dataset.archive==="1";b.disabled=true;
+  try{
+    await db.doc("initiatives/"+id).update(arch?{archived:true,archived_at:new Date().toISOString()}:{archived:false,archived_at:null});
+    note("");toast(iniName(id)+(arch?" archived. Find it under Archived initiatives.":" is back in FYI initiatives."));
+  }catch(err){note(err&&err.code==="invalid_argument"?"You can view this page but not change it.":"Could not change that initiative. Try again in a moment.");b.disabled=false;}
+});
+$("show-closed").addEventListener("change",e=>{showClosed=e.target.checked;savePrefs({showClosed});render();});
+$("add-form").addEventListener("submit",async e=>{
+  e.preventDefault();if(!db)return;
+  const text=$("add-text").value.trim();if(!text)return;
+  const due=$("add-due").value;
+  const btn=e.target.querySelector("button[type=submit]");btn.disabled=true;
+  try{
+    const ref=db.collection("items").doc();
+    await ref.set({initiative_id:$("add-ini").value,type:$("add-type").value,text,counterpart:"",link:"",source:"manual",created:new Date().toISOString(),due:due?new Date(due+"T17:00:00").toISOString():null,state:"open"});
+    $("add-text").value="";$("add-due").value="";note("");
+  }catch(err){note(err&&err.code==="invalid_argument"?"You can view this page but not change it.":"Could not add that item. Try again in a moment.");}
+  btn.disabled=false;
+});
+
+const hashView=(location.hash||"").slice(1);
+setView(VIEWS.includes(hashView)?hashView:(VIEWS.includes(prefs.view)?prefs.view:"queues"));
+render();
+(async()=>{
+  db=window.claude&&window.claude.use?await window.claude.use("db"):null;
+  if(!db){render();return;}
+  const sub=(coll,set)=>db.collection(coll).onSnapshot(s=>{set(s.docs.map(d=>({...d.data(),id:d.id})));render();},()=>render());
+  sub("initiatives",v=>inits=v.sort((a,b)=>(a.order??99)-(b.order??99)));
+  sub("items",v=>items=v);
+  sub("meetings",v=>meetings=v);
+  sub("wins",v=>wins=v);
+  sub("digests",v=>digests=v);
+  sub("reports",v=>reports=v);
+  db.doc("meta/sweep").onSnapshot(s=>{meta=s.exists?s.data():null;render();},()=>render());
+  db.doc("meta/recommendations").onSnapshot(s=>{recs=s.exists?s.data():null;render();},()=>render());
+  let firstPrefs=true;
+  db.doc("meta/prefs").onSnapshot(s=>{
+    if(!s.exists||s.metadata.hasPendingWrites)return;
+    const p=s.data();prefs={...prefs,...p};
+    try{localStorage.setItem("assistant.prefs",JSON.stringify(prefs))}catch(e){}
+    applyTheme(prefs.theme||"dark");
+    showClosed=!!prefs.showClosed;$("show-closed").checked=showClosed;
+    if(firstPrefs&&!VIEWS.includes(hashView))setView(VIEWS.includes(prefs.view)?prefs.view:"queues");
+    firstPrefs=false;render();
+  },()=>{});
+})();
+</script>
+
+</body></html>

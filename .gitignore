@@ -1,0 +1,8 @@
+# Everything setup generates is personal. The kit itself is only README.md, SETUP.md and templates/.
+# Root-anchored so templates/tasks/ and similar are never ignored.
+/config.md
+/spec/
+/tasks/
+/skills/
+/artifact/
+/status-reports/
